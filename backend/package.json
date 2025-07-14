@@ -12,7 +12,9 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^6.11.1",
+    "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^3.0.2",
     "bullmq": "^5.56.4",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
