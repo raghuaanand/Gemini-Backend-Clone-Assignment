@@ -23,6 +23,8 @@ model User {
   chatrooms Chatroom[]
   messages  Message[]
   subscriptionTier String @default("BASIC")
+  stripeCustomerId String? @unique
+  stripeSubscriptionId String?
 }
 
 model Chatroom {
