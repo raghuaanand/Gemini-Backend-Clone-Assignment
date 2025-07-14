@@ -47,7 +47,61 @@ export const subscribePro = async (req: AuthRequest, res: Response) => {
 };
 
 export const stripeWebhook = async (req: Request, res: Response) => {
-  res.status(501).json({ message: 'Not implemented' });
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig as string,
+      process.env.STRIPE_WEBHOOK_SECRET as string
+    );
+  } catch (err) {
+    return res.status(400).json({ message: `Webhook Error: ${(err as Error).message}` });
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as any;
+        const customerId = session.customer;
+        const subscriptionId = session.subscription;
+        // Find user by Stripe customer ID
+        const user = await prisma.user.findUnique({ where: { stripeCustomerId: customerId } });
+        if (user) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              subscriptionTier: 'PRO',
+              stripeSubscriptionId: subscriptionId,
+            },
+          });
+        }
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as any;
+        const subscriptionId = subscription.id;
+        // Find user by Stripe subscription ID
+        const user = await prisma.user.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
+        if (user) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              subscriptionTier: 'BASIC',
+              stripeSubscriptionId: null,
+            },
+          });
+        }
+        break;
+      }
+      // Optionally handle other events (e.g., payment_failed)
+      default:
+        break;
+    }
+    res.status(200).json({ received: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Webhook handling failed', error });
+  }
 };
 
 export const subscriptionStatus = async (req: AuthRequest, res: Response) => {
