@@ -54,6 +54,33 @@ export const listChatrooms = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const getChatroomDetails = async (req: Request, res: Response) => {
-  res.status(501).json({ message: 'Not implemented' });
+export const getChatroomDetails = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.userId;
+  const chatroomId = req.params.id;
+  try {
+    const chatroom = await prisma.chatroom.findFirst({
+      where: { id: chatroomId, userId },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+        messages: {
+          select: {
+            id: true,
+            content: true,
+            userId: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    if (!chatroom) {
+      return res.status(404).json({ message: 'Chatroom not found' });
+    }
+    return res.status(200).json({ chatroom });
+  } catch (error) {
+    return res.status(500).json({ message: 'Internal server error', error });
+  }
 }; 
