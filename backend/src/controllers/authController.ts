@@ -17,8 +17,10 @@ export const signup = async (req: Request, res: Response) => {
     if (existing) {
       return res.status(409).json({ message: 'User already exists' });
     }
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { mobile, password },
+      data: { mobile, password: hashedPassword },
     });
     return res.status(201).json({ message: 'User created', user: { id: user.id, mobile: user.mobile } });
   } catch (error) {
@@ -126,12 +128,13 @@ export const changePassword = async (req: Request, res: Response) => {
       await redis.del(`otp:reset:${user.mobile}`);
     } else {
       // Otherwise, check old password
-      if (!oldPassword || user.password !== oldPassword) {
+      if (!oldPassword || !(await bcrypt.compare(oldPassword, user.password))) {
         return res.status(401).json({ message: 'Old password is incorrect' });
       }
     }
-    // Update password
-    await prisma.user.update({ where: { id: userId }, data: { password: newPassword } });
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashedNewPassword } });
     return res.status(200).json({ message: 'Password changed successfully' });
   } catch (error) {
     return res.status(500).json({ message: 'Internal server error', error });
