@@ -94,6 +94,22 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ message: 'Message content is required' });
   }
   try {
+    // Get user subscription tier
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (user.subscriptionTier === 'BASIC') {
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const rateKey = `rate:${userId}:${today}`;
+      const count = await redis.incr(rateKey);
+      if (count === 1) {
+        await redis.expire(rateKey, 86400); // Set expiry to 1 day
+      }
+      if (count > 5) {
+        return res.status(429).json({ message: 'Daily message limit reached for Basic tier. Upgrade to Pro for more usage.' });
+      }
+    }
     // Store user message
     const userMessage = await prisma.message.create({
       data: {
