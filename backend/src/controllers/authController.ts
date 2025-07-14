@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
+import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -42,7 +43,32 @@ export const sendOtp = async (req: Request, res: Response) => {
 };
 
 export const verifyOtp = async (req: Request, res: Response) => {
-  res.status(501).json({ message: 'Not implemented' });
+  const { mobile, otp } = req.body;
+  if (!mobile || !otp) {
+    return res.status(400).json({ message: 'Mobile and OTP are required' });
+  }
+  try {
+    const storedOtp = await redis.get(`otp:${mobile}`);
+    if (!storedOtp || storedOtp !== otp) {
+      return res.status(401).json({ message: 'Invalid or expired OTP' });
+    }
+    // OTP is valid, delete it from Redis
+    await redis.del(`otp:${mobile}`);
+    // Check if user exists
+    const user = await prisma.user.findUnique({ where: { mobile } });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    // Issue JWT
+    const token = jwt.sign(
+      { userId: user.id, mobile: user.mobile },
+      process.env.JWT_SECRET || 'secret',
+      { expiresIn: '7d' }
+    );
+    return res.status(200).json({ message: 'OTP verified', token });
+  } catch (error) {
+    return res.status(500).json({ message: 'Internal server error', error });
+  }
 };
 
 export const forgotPassword = async (req: Request, res: Response) => {
